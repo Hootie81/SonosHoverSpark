@@ -55,8 +55,8 @@
 #define REMOTE_REPEAT 0xFB
 #define REMOTE_AB 0xFC
 #define REMOTE_SCAN 0xFD
-#define REMOTE_REV 0xFE
-#define REMOTE_FWD 0xFF
+#define REMOTE_REV 0b01000010
+#define REMOTE_FWD 0b01001000
 //#define REMOTE_VOLU 0b00101000
 //#define REMOTE_VOLD 0b00110000
 //Thomson universal set to Philips code = 0200
@@ -153,7 +153,7 @@ if (hover.getStatus(ts) == 0) {
 * only process if this is the first packet for 200ms -
 * prevents multiple operations
 */
-    if (millis() > (lastcmd + 200)) {
+    if (millis() > (lastcmd + 200) && (eventtype != 0)) {
 /* compare received IR against known commands */
         switch (eventtype) {
     
@@ -360,8 +360,8 @@ return tot;
 void
 out(const char *s)
 {
+    delay(100);
 client.println(s);
-
 #ifdef DEBUG
 Serial.println(s);
 #endif
@@ -383,6 +383,7 @@ char copying;
 unsigned long timeout;
 extra[0] = 0;
 strcpy(service, "AVTransport");
+//delay(2000);
 if (client.connect(sonosip, 1400)) {
 #ifdef DEBUG
 Serial.println("connected");
