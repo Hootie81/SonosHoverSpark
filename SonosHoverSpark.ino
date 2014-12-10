@@ -1,6 +1,9 @@
 /*
 * ======================================================================
-* SonosIR - Arduino sketch for infrared control of Sonos ZonePlayer (c) 2010
+* Hover + Spark - Spark Core code for controlling Sonos devices with gestures using 
+* 				  the Hover board (http://www.hoverlabs.co/#hover) 
+*
+* Modified from SonosIR - Arduino sketch for infrared control of Sonos ZonePlayer (c) 2010
 * Simon Long, KuDaTa Software
 *
 * Original Sonos control Arduino sketch by Jan-Piet Mens. Uses the Arduino
@@ -13,6 +16,7 @@
 * 2010-04-24 simon added volume control
 * 2014-12-10 Hootie81 Modified for Hover control
 *
+* Wiring diagram found Here : http://www.hoverlabs.co/spark
 */
 
 #include "application.h"
@@ -45,24 +49,13 @@
 #define MODE_SCAN 1
 #define MODE_A 2
 #define MODE_AB 3
-
-/* IRremote hex codes for received remote commands */
-//#define REMOTE_PLAY 0x35
-//#define REMOTE_PAUSE 0x30
-//#define REMOTE_PREV 0x21
-//#define REMOTE_NEXT 0x20
-#define REMOTE_SHUFFLE 0xFA
-#define REMOTE_REPEAT 0xFB
-#define REMOTE_AB 0xFC
+/* Hover codes for received commands */
+#define REMOTE_SHUFFLE 0b01000010
+#define REMOTE_REPEAT 0b01001000
+#define REMOTE_AB 0xFC 
 #define REMOTE_SCAN 0xFD
-#define REMOTE_REV 0b01000010
-#define REMOTE_FWD 0b01001000
-//#define REMOTE_VOLU 0b00101000
-//#define REMOTE_VOLD 0b00110000
-//Thomson universal set to Philips code = 0200
-// 0C 0D
-// 20 10
-// 21 11
+#define REMOTE_REV 0xFE 
+#define REMOTE_FWD 0xFF 
 #define REMOTE_PLAY 0b01010000
 #define REMOTE_PAUSE 0b01000001
 #define REMOTE_NEXT 0b00100010
@@ -72,9 +65,9 @@
 /* IP addresses of Arduino and ZonePlayer */
 #define IP1 192
 #define IP2 168
-#define IP3 43
-#define IP4ZP 189 /* Office */
-#define IP4ARD 154 /* Arduino */
+#define IP3 1
+#define IP4 5 /* Office */
+
 /* Enable DEBUG for serial debug output */
 //
 //#define DEBUG
@@ -91,7 +84,7 @@ byte eventtype;
 String outputstring;
 
 /* IP address of ZonePlayer to control */
-byte sonosip[] = { IP1, IP2, IP3, IP4ZP };
+byte sonosip[] = { IP1, IP2, IP3, IP4 };
 /* Millisecond timer values */
 unsigned long lastcmd = 0;
 unsigned long lastrew = 0;
@@ -117,9 +110,7 @@ TCPClient client;
 /*----------------------------------------------------------------------*/
 /*----------------------------------------------------------------------*/
 /* setup - configures Arduino */
-void
-setup()
-{
+void setup() {
 
 mode = MODE_NORMAL;
 #ifdef DEBUG
@@ -131,9 +122,7 @@ hover.begin(ts, reset);
 }
 /*----------------------------------------------------------------------*/
 /* loop - called repeatedly by Arduino */
-void
-loop()
-{
+void loop() {
 int res;
 if (hover.getStatus(ts) == 0) {
     eventtype = hover.getEvent();
@@ -145,15 +134,14 @@ if (hover.getStatus(ts) == 0) {
     String temp = hover.getEventString(eventtype);
     outputstring = temp;
     if (outputstring != ""){
-      Serial.print(eventtype,BIN);
-      Serial.println(" = " + outputstring);
+      Serial.println("\r\n" + outputstring);
     }
     #endif
 /*
 * only process if this is the first packet for 200ms -
 * prevents multiple operations
 */
-    if (millis() > (lastcmd + 200) && (eventtype != 0)) {
+    if (millis() > (lastcmd + 50) && (eventtype != 0)) {
 /* compare received IR against known commands */
         switch (eventtype) {
     
@@ -331,9 +319,7 @@ lastpoll = millis();
 }
 /*----------------------------------------------------------------------*/
 /* seconds - converts supplied string in format hh:mm:ss to seconds */
-int
-seconds(char *str)
-{
+int seconds(char *str) {
 int hrs, mins, secs;
 sscanf(str, "%d:%d:%d", &hrs, &mins, &secs);
 hrs *= 60;
@@ -344,9 +330,7 @@ return hrs;
 }
 /*----------------------------------------------------------------------*/
 /* sum_letters - adds ASCII codes for all letters in supplied string */
-int
-sum_letters(char *str)
-{
+int sum_letters(char *str) {
 int tot = 0;
 char *ptr = str;
 while (*ptr) {
@@ -357,22 +341,19 @@ return tot;
 }
 /*----------------------------------------------------------------------*/
 /* out - outputs supplied string to Ethernet client */
-void
-out(const char *s)
-{
-    delay(100);
-client.println(s);
+void out(const char *s) {
+
+client.write( (const uint8_t*)s, strlen(s) );
+
 #ifdef DEBUG
-Serial.println(s);
+Serial.write( (const uint8_t*)s, strlen(s) );
 #endif
 }
 /*----------------------------------------------------------------------*/
 /* sonos - sends a command packet to the ZonePlayer */
-void
-sonos(int cmd, char *resp1, char *resp2)
-{
+void sonos(int cmd, char *resp1, char *resp2) {
 //char buf[512];
-char buf[350];
+char buf[380];
 char cmdbuf[32];
 char extra[64];
 char service[20];
@@ -446,18 +427,18 @@ strcpy(service, "RenderingControl");
 break;
 }
 /* output the command packet */
-sprintf(buf, "POST /MediaRenderer/%s/Control HTTP/1.1", service);
+sprintf(buf, "POST /MediaRenderer/%s/Control HTTP/1.1\r\n", service);
 out(buf);
-out("Connection: close");
-sprintf(buf, "Host: %d.%d.%d.%d:1400", sonosip[0], sonosip[1], sonosip[2], sonosip[3]);
+out("Connection: close\r\n");
+sprintf(buf, "Host: %d.%d.%d.%d:1400\r\n", sonosip[0], sonosip[1], sonosip[2], sonosip[3]);
 out(buf);
-sprintf(buf, "Content-Length: %d", 231 + 2 * strlen(cmdbuf) + strlen(extra) + strlen(service));
+sprintf(buf, "Content-Length: %d\r\n", 231 + 2 * strlen(cmdbuf) + strlen(extra) + strlen(service));
 out(buf);
-out("Content-Type: text/xml; charset=\"utf-8\"");
-sprintf(buf, "Soapaction: \"urn:schemas-upnp-org:service:%s:1#%s\"", service, cmdbuf);
+out("Content-Type: text/xml; charset=\"utf-8\"\r\n");
+sprintf(buf, "Soapaction: \"urn:schemas-upnp-org:service:%s:1#%s\"\r\n", service, cmdbuf);
 out(buf);
-out("");
-sprintf(buf, "%s<u:%s%s%s%s%s</u:%s>%s", SONOS_CMDH, cmdbuf, SONOS_CMDP, service, SONOS_CMDQ, extra, cmdbuf, SONOS_CMDF);
+out("\r\n");
+sprintf(buf, "%s<u:%s%s%s%s%s</u:%s>%s\r\n", SONOS_CMDH, cmdbuf, SONOS_CMDP, service, SONOS_CMDQ, extra, cmdbuf, SONOS_CMDF);
 out(buf);
 /* wait for a response packet */
 timeout = millis();
@@ -559,8 +540,8 @@ Serial.println("connection failed");
 #endif
 }
 while (client.available()) client.read(); 
-client.flush();
-delay(400);
+
+delay(100);
 client.stop();
 }
 /* End of file */
